@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-# Detection2.py - Fixed version for Raspberry Pi Zero 2W
-# Keeps original features but uses Picamera2 correctly
+print(">>> Running UPDATED Detection2.py with Picamera2")
 
 from picamera2 import Picamera2
 import cv2
@@ -12,23 +10,36 @@ config = picam2.create_preview_configuration(main={"format": "XRGB8888", "size":
 picam2.configure(config)
 picam2.start()
 
-time.sleep(1)  # Allow camera to warm up
-print("✅ Camera started. Press 'q' to quit.")
+time.sleep(2)  # Let camera warm up
 
-while True:
-    # Capture one frame from Picamera2
-    frame = picam2.capture_array()
+# Load a sample Haar cascade (you can replace with your model)
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-    # (This part keeps your "detection logic" placeholder)
-    # Currently just shows the preview, but you can plug in AI/ML detection here
-    cv2.imshow("Detection Preview", frame)
+print(">>> Starting detection loop. Press CTRL+C to exit.")
 
-    # Quit loop with 'q'
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+try:
+    while True:
+        frame = picam2.capture_array()
 
-# Cleanup
-cv2.destroyAllWindows()
-picam2.stop()
-print("❌ Camera stopped.")
+        # Convert to grayscale for detection
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+        # Run detection
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+
+        # Print how many faces (or objects) were detected
+        if len(faces) > 0:
+            print(f"Detected {len(faces)} face(s)")
+
+        # OPTIONAL: show preview window if you’re running with a display
+        # Comment out if headless
+        cv2.imshow("Detection2 Preview", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+except KeyboardInterrupt:
+    print("\n>>> Detection stopped by user.")
+
+finally:
+    picam2.stop()
+    cv2.destroyAllWindows()
