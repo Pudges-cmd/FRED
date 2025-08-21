@@ -1,12 +1,28 @@
 import serial
 import time
+import glob
 
 # Serial port for SIM7600X G-H (adjust if needed)
-SIM7600_PORT = '/dev/ttyUSB2'  # Sometimes /dev/ttyUSB3 or /dev/ttyS0
+SIM7600_PORT = '/dev/ttyUSB2'  # Default; will auto-detect if not present
 BAUDRATE = 115200
 
 # Serial port for GPS (SIM7600X G-H shares port, but GPS NMEA often on /dev/ttyUSB1)
 GPS_PORT = '/dev/ttyUSB1'
+# --- SMS SENDING ---
+def _autodetect_port(preferred_ports):
+    """Find first existing serial device from candidate list or glob.
+    """
+    for candidate in preferred_ports:
+        if '*' in candidate:
+            for dev in glob.glob(candidate):
+                return dev
+        else:
+            try:
+                with open(candidate, 'rb'):
+                    return candidate
+            except Exception:
+                continue
+    return None
 GPS_BAUDRATE = 115200
 
 # Timeout for serial operations
@@ -23,7 +39,21 @@ def send_sms(phone_number, message):
         bool: True if sent, False otherwise
     """
     try:
-        ser = serial.Serial(SIM7600_PORT, BAUDRATE, timeout=SERIAL_TIMEOUT)
+        port = SIM7600_PORT
+        if not port:
+            port = _autodetect_port(['/dev/ttyUSB2', '/dev/ttyUSB3', '/dev/ttyUSB1', '/dev/ttyS0', '/dev/serial0', '/dev/ttyAMA0'])
+        else:
+            # If default is missing, attempt auto
+            try:
+                with open(port, 'rb'):
+                    pass
+            except Exception:
+                port = _autodetect_port(['/dev/ttyUSB2', '/dev/ttyUSB3', '/dev/ttyUSB1', '/dev/ttyS0', '/dev/serial0', '/dev/ttyAMA0'])
+
+        if not port:
+            raise serial.SerialException('No SIM7600 serial port found')
+
+        ser = serial.Serial(port, BAUDRATE, timeout=SERIAL_TIMEOUT)
         time.sleep(0.5)
         ser.write(b'AT+CMGF=1\r')  # Set SMS text mode
         time.sleep(0.5)
@@ -48,7 +78,20 @@ def get_gps_location():
         dict: {'lat': float, 'lon': float, 'alt': float, 'fix': bool} or None if not available
     """
     try:
-        ser = serial.Serial(GPS_PORT, GPS_BAUDRATE, timeout=SERIAL_TIMEOUT)
+        port = GPS_PORT
+        if not port:
+            port = _autodetect_port(['/dev/ttyUSB1', '/dev/ttyUSB2', '/dev/ttyUSB3', '/dev/ttyS0', '/dev/serial0', '/dev/ttyAMA0'])
+        else:
+            try:
+                with open(port, 'rb'):
+                    pass
+            except Exception:
+                port = _autodetect_port(['/dev/ttyUSB1', '/dev/ttyUSB2', '/dev/ttyUSB3', '/dev/ttyS0', '/dev/serial0', '/dev/ttyAMA0'])
+
+        if not port:
+            raise serial.SerialException('No GPS serial port found')
+
+        ser = serial.Serial(port, GPS_BAUDRATE, timeout=SERIAL_TIMEOUT)
         time.sleep(0.5)
         ser.write(b'AT+CGPS=1,1\r')  # Turn on GPS
         time.sleep(2)
